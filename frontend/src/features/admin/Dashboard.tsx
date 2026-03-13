@@ -1,0 +1,193 @@
+import { motion } from 'framer-motion';
+import {
+  Users, Building2, Briefcase, TrendingUp, CheckCircle, Clock,
+  BarChart3, ChevronRight, Target,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import StatCard from '@/components/shared/StatCard';
+import SectionCard from '@/components/shared/SectionCard';
+import AIInsightCard from '@/components/shared/AIInsightCard';
+import MatchScoreBadge from '@/components/shared/MatchScoreBadge';
+import { MOCK_ANALYTICS, MOCK_COMPANIES, MOCK_MATCH_RESULTS } from '@/lib/mock-data';
+import { useAdminAnalytics, useAdminCompanies } from '@/hooks/api';
+
+const AI_INSIGHTS = [
+  { message: 'Google SWE Internship has 0 applications but 3 eligible students. Send a targeted nudge.', action: 'Send nudge', priority: 'high' as const },
+  { message: 'Average match score dropped 4% this week — 2 students have unverified skills. Review profiles.', action: 'Review', priority: 'medium' as const },
+  { message: 'TCS Digital deadline in 5 days — 12 eligible students haven\'t applied yet.', action: 'Notify students', priority: 'high' as const },
+];
+
+const TIMELINE = [
+  { text: 'Google shortlist exported (8 candidates)', time: '30m ago', dot: 'bg-green-500' },
+  { text: 'Amazon JD uploaded and parsed', time: '2h ago', dot: 'bg-blue-500' },
+  { text: 'Batch AI matching run completed — 47 results', time: '4h ago', dot: 'bg-brand-oxford' },
+  { text: 'Arjun Sharma profile updated', time: '1d ago', dot: 'bg-gray-400' },
+  { text: 'Wipro Technologies recruiter registered', time: '2d ago', dot: 'bg-brand-tan-500' },
+];
+
+export default function AdminDashboard() {
+  const { data: liveAnalytics } = useAdminAnalytics();
+  const { data: liveCompanies } = useAdminCompanies();
+
+  const analytics = liveAnalytics ?? MOCK_ANALYTICS;
+  const companies = liveCompanies ?? MOCK_COMPANIES;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-black text-brand-oxford">Placement Cell Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · Placement Season 2025–26
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { title: 'Total Students', value: String(analytics.overview.totalStudents), trend: { value: 12, positive: true }, icon: Users, color: 'text-brand-oxford' as const },
+          { title: 'Active Companies', value: String(analytics.overview.totalCompanies), trend: { value: 3, positive: true }, icon: Building2, color: 'text-blue-600' as const },
+          { title: 'Open Positions', value: String(analytics.overview.openJobs), trend: { value: 5, positive: true }, icon: Briefcase, color: 'text-amber-500' as const },
+          { title: 'Applications', value: String(analytics.overview.totalApplications), trend: { value: 8, positive: true }, icon: TrendingUp, color: 'text-green-600' as const },
+        ].map((s, i) => (
+          <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+            <StatCard {...s} />
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Placement funnel */}
+          <SectionCard title="Placement Funnel" subtitle="Current season progress" icon={BarChart3}>
+            <div className="space-y-3">
+              {[
+                { label: 'Registered Students', value: analytics.overview.totalStudents, max: analytics.overview.totalStudents, color: 'bg-brand-oxford' },
+                { label: 'Total Matches', value: analytics.overview.totalMatches > 999 ? 999 : analytics.overview.totalMatches, max: analytics.overview.totalStudents, color: 'bg-blue-500' },
+                { label: 'Applications', value: analytics.overview.totalApplications, max: analytics.overview.totalStudents, color: 'bg-amber-500' },
+                { label: 'Shortlisted', value: analytics.shortlistBreakdown.HIGHLY_RECOMMENDED + analytics.shortlistBreakdown.RECOMMENDED, max: analytics.overview.totalStudents, color: 'bg-purple-500' },
+                { label: 'Recent Activity', value: analytics.overview.recentApplications, max: analytics.overview.totalStudents, color: 'bg-green-500' },
+              ].map((row, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground w-40 flex-shrink-0">{row.label}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(row.value / row.max) * 100}%` }}
+                      transition={{ delay: 0.2 + i * 0.1, duration: 0.6 }}
+                      className={`h-full rounded-full ${row.color}`}
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-foreground w-8 text-right">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* Top matches */}
+          <SectionCard
+            title="Recent Match Results"
+            subtitle="Latest AI matching computations"
+            icon={Target}
+            action={
+              <Link to="/admin/matching" className="text-xs font-semibold text-brand-oxford flex items-center gap-1 hover:underline">
+                Run Matching <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            }
+          >
+            <div className="space-y-2.5">
+              {MOCK_MATCH_RESULTS.slice(0, 5).map((m, i) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.07 }}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/80 hover:bg-brand-oxford/4 transition-colors"
+                >
+                  <div className="w-7 h-7 rounded-full bg-brand-oxford/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-brand-oxford">{m.studentProfile?.firstName?.charAt(0) ?? 'S'}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-foreground truncate">{m.studentProfile ? `${m.studentProfile.firstName} ${m.studentProfile.lastName}` : 'Student'}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{m.job?.title} · {m.job?.company?.name}</p>
+                  </div>
+                  <MatchScoreBadge score={m.overallMatchPercentage} size="sm" />
+                </motion.div>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* Company overview */}
+          <SectionCard
+            title="Active Companies"
+            icon={Building2}
+            action={
+              <Link to="/admin/companies" className="text-xs font-semibold text-brand-oxford flex items-center gap-1 hover:underline">
+                View all <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            }
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {companies.slice(0, 6).map((c, i) => (
+                <motion.div
+                  key={c.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1 + i * 0.05 }}
+                  className="p-3 rounded-xl bg-gray-50/80 border border-border hover:border-brand-oxford/20 transition-all"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-brand-oxford/8 flex items-center justify-center mb-2">
+                    <Building2 className="w-4 h-4 text-brand-oxford" strokeWidth={1.5} />
+                  </div>
+                  <p className="text-xs font-bold text-foreground truncate">{c.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{c.industry}</p>
+                </motion.div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-5">
+          <AIInsightCard title="Placement Cell AI" insights={AI_INSIGHTS} />
+
+          {/* Application stats */}
+          <SectionCard title="Application Status" icon={CheckCircle}>
+            <div className="space-y-2.5">
+              {[
+                { label: 'Pending Review', value: analytics.applicationStatusBreakdown.UNDER_REVIEW ?? 18, color: 'bg-gray-200' },
+                { label: 'Shortlisted', value: analytics.applicationStatusBreakdown.SHORTLISTED ?? 0, color: 'bg-blue-400' },
+                { label: 'Interviews', value: analytics.applicationStatusBreakdown.INTERVIEW_SCHEDULED ?? 6, color: 'bg-amber-400' },
+                { label: 'Offered', value: analytics.applicationStatusBreakdown.SELECTED ?? 0, color: 'bg-green-500' },
+                { label: 'Rejected', value: 9, color: 'bg-red-400' },
+              ].map((s, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                    <span className="text-xs text-foreground">{s.label}</span>
+                  </div>
+                  <span className="text-xs font-bold text-foreground">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* Timeline */}
+          <SectionCard title="Recent Activity" icon={Clock}>
+            <div className="space-y-3">
+              {TIMELINE.map((t, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${t.dot}`} />
+                  <div>
+                    <p className="text-xs text-foreground">{t.text}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    </div>
+  );
+}

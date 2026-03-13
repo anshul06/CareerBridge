@@ -1,0 +1,653 @@
+// DSU CareerBridge - Prisma Schema
+// Production-grade campus placement platform schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  ADMIN
+  RECRUITER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum AchievementType {
+  HACKATHON
+  INTERNSHIP
+  PROJECT
+  RESEARCH_PAPER
+  CERTIFICATION
+  CLUB_LEADERSHIP
+  AWARD
+  WORKSHOP
+  TECHNICAL_EVENT
+  VOLUNTEERING
+  OTHER
+}
+
+enum ResumeType {
+  UPLOADED
+  GENERATED
+  ENHANCED
+  TAILORED
+}
+
+enum ResumeStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum JobType {
+  FULL_TIME
+  INTERNSHIP
+  CONTRACT
+  PART_TIME
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  UNDER_REVIEW
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  SELECTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum EligibilityStatus {
+  ELIGIBLE
+  PARTIALLY_ELIGIBLE
+  INELIGIBLE
+}
+
+enum SkillConfidence {
+  HIGH     // explicitly stated
+  MEDIUM   // inferred from context
+  LOW      // weak inference
+}
+
+enum SkillCategory {
+  PROGRAMMING_LANGUAGE
+  FRAMEWORK_LIBRARY
+  DATABASE
+  CLOUD_DEVOPS
+  AI_ML
+  DATA_ANALYTICS
+  CS_FUNDAMENTALS
+  SOFT_SKILLS
+  DOMAIN_SKILLS
+  TOOLS_PLATFORMS
+  OTHER
+}
+
+enum JobSkillType {
+  REQUIRED
+  PREFERRED
+}
+
+enum ShortlistStatus {
+  HIGHLY_RECOMMENDED
+  RECOMMENDED
+  BORDERLINE
+  NOT_RECOMMENDED
+}
+
+enum FileCategory {
+  RESUME
+  CERTIFICATE
+  PROJECT_DOCUMENT
+  JD_DOCUMENT
+  PROFILE_PHOTO
+  OTHER
+}
+
+enum NotificationType {
+  APPLICATION_UPDATE
+  JOB_POSTED
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  SYSTEM
+}
+
+// ─────────────────────────────────────────────
+// CORE USER & PROFILES
+// ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  studentProfile   StudentProfile?
+  adminProfile     AdminProfile?
+  recruiterProfile RecruiterProfile?
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model StudentProfile {
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id])
+
+  // Personal info
+  firstName            String
+  lastName             String
+  phone                String?
+  gender               Gender?
+  dateOfBirth          DateTime?
+  photoUrl             String?
+
+  // Academic identifiers
+  usn                  String?   @unique  // University Seat Number
+  rollNo               String?
+
+  // Academic details
+  department           String
+  semester             Int?
+  yearOfAdmission      Int?
+  expectedGraduationYear Int?
+  cgpa                 Float?
+  activeBacklogs       Int       @default(0)
+  totalBacklogs        Int       @default(0)
+
+  // Previous education
+  tenthPercentage      Float?
+  tenthBoard           String?
+  tenthYear            Int?
+  twelfthPercentage    Float?
+  twelfthBoard         String?
+  twelfthYear          Int?
+  diplomaPercentage    Float?
+  diplomaStream        String?
+
+  // Social & portfolio
+  linkedinUrl          String?
+  githubUrl            String?
+  portfolioUrl         String?
+
+  // Profile completeness (0-100)
+  profileCompleteness  Int       @default(0)
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  achievements         Achievement[]
+  projects             Project[]
+  certifications       Certification[]
+  resumes              Resume[]
+  applications         Application[]
+  studentSkills        StudentSkill[]
+  matchResults         MatchResult[]
+
+  @@index([department])
+  @@index([expectedGraduationYear])
+  @@index([cgpa])
+  @@map("student_profiles")
+}
+
+model AdminProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  firstName  String
+  lastName   String
+  phone      String?
+  department String?
+  designation String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("admin_profiles")
+}
+
+model RecruiterProfile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+  firstName   String
+  lastName    String
+  phone       String?
+  designation String?
+  companyId   String?
+  company     Company?  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("recruiter_profiles")
+}
+
+// ─────────────────────────────────────────────
+// COMPANY & JOBS
+// ─────────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  website     String?
+  industry    String?
+  description String?
+  logoUrl     String?
+  location    String?
+  size        String?  // e.g. "1-50", "51-200", "201-1000", "1000+"
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  jobs             Job[]
+  recruiterProfiles RecruiterProfile[]
+
+  @@map("companies")
+}
+
+model Job {
+  id                  String    @id @default(uuid())
+  companyId           String
+  company             Company   @relation(fields: [companyId], references: [id])
+
+  title               String
+  description         String    @db.Text
+  responsibilities    String[]
+  location            String?
+  jobType             JobType   @default(FULL_TIME)
+  status              JobStatus @default(OPEN)
+
+  // Package
+  ctcMin              Float?
+  ctcMax              Float?
+  ctcCurrency         String    @default("INR")
+
+  // Eligibility rules
+  eligibleBranches    String[]
+  minCgpa             Float?
+  maxBacklogs         Int?
+  allowedGraduationYears Int[]
+  genderConstraint    String?   // null = no constraint
+  additionalEligibilityNotes String?
+
+  // Parsed JD metadata
+  experienceLevel     String?   @default("fresher")
+  keywords            String[]
+  rawJdText           String?   @db.Text
+  jdFileId            String?   // UploadedFile.id
+
+  // Dates
+  applicationDeadline DateTime?
+  driveDate           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  jobSkills           JobSkill[]
+  applications        Application[]
+  matchResults        MatchResult[]
+  shortlists          Shortlist[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model JobSkill {
+  id          String       @id @default(uuid())
+  jobId       String
+  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill        @relation(fields: [skillId], references: [id])
+  type        JobSkillType
+  importance  Int          @default(5) // 1-10 weight
+
+  @@unique([jobId, skillId, type])
+  @@map("job_skills")
+}
+
+// ─────────────────────────────────────────────
+// SKILLS TAXONOMY
+// ─────────────────────────────────────────────
+
+model Skill {
+  id           String        @id @default(uuid())
+  name         String        @unique  // canonical name e.g. "JavaScript"
+  aliases      String[]      // e.g. ["JS", "js", "javascript"]
+  category     SkillCategory
+  description  String?
+  parentSkillId String?
+  parentSkill  Skill?        @relation("SkillHierarchy", fields: [parentSkillId], references: [id])
+  childSkills  Skill[]       @relation("SkillHierarchy")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+
+  studentSkills StudentSkill[]
+  jobSkills     JobSkill[]
+
+  @@index([name])
+  @@index([category])
+  @@map("skills")
+}
+
+model StudentSkill {
+  id               String          @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill           @relation(fields: [skillId], references: [id])
+  confidence       SkillConfidence @default(HIGH)
+  source           String?         // e.g. "resume", "project:uuid", "certification:uuid", "manual"
+  inferenceReason  String?         // explanation for inferred skills
+  yearsExperience  Float?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([studentProfileId, skillId])
+  @@map("student_skills")
+}
+
+// ─────────────────────────────────────────────
+// ACHIEVEMENTS, PROJECTS, CERTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Achievement {
+  id               String          @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  type             AchievementType
+  title            String
+  description      String?         @db.Text
+  organization     String?
+  startDate        DateTime?
+  endDate          DateTime?
+  isOngoing        Boolean         @default(false)
+  position         String?         // e.g. "1st place", "finalist"
+  url              String?
+  fileId           String?         // supporting document
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  @@index([studentProfileId])
+  @@index([type])
+  @@map("achievements")
+}
+
+model Project {
+  id               String          @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  title            String
+  description      String          @db.Text
+  techStack        String[]
+  repoUrl          String?
+  liveUrl          String?
+  startDate        DateTime?
+  endDate          DateTime?
+  isOngoing        Boolean         @default(false)
+  highlights       String[]        // key bullet points
+  fileId           String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  @@index([studentProfileId])
+  @@map("projects")
+}
+
+model Certification {
+  id               String          @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  name             String
+  issuingOrganization String
+  issueDate        DateTime?
+  expiryDate       DateTime?
+  credentialId     String?
+  credentialUrl    String?
+  description      String?
+  inferredSkills   String[]        // AI-extracted from cert name/description
+  fileId           String?         // certificate file
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  @@index([studentProfileId])
+  @@map("certifications")
+}
+
+// ─────────────────────────────────────────────
+// RESUMES
+// ─────────────────────────────────────────────
+
+model Resume {
+  id               String          @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  type             ResumeType
+  status           ResumeStatus    @default(ACTIVE)
+  title            String          @default("My Resume")
+  version          Int             @default(1)
+
+  // If tailored, link to job
+  targetJobId      String?
+
+  // Parsed / structured content
+  structuredContent Json?           // full structured JSON
+  htmlContent       String?         @db.Text
+  extractedText     String?         @db.Text  // raw text from uploaded PDF/DOCX
+
+  // Enhancement metadata
+  enhancementNotes  Json?           // missing sections, weak bullets, etc.
+
+  // Skill extraction results
+  extractedSkills   Json?           // array of { skill, confidence, source }
+
+  // File link
+  fileId            String?
+
+  isMaster          Boolean         @default(false)  // canonical base resume
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  sections          ResumeSection[]
+
+  @@index([studentProfileId])
+  @@index([type])
+  @@map("resumes")
+}
+
+model ResumeSection {
+  id        String   @id @default(uuid())
+  resumeId  String
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  sectionType String  // "summary", "education", "experience", "projects", "skills", "certifications", "achievements"
+  title     String
+  content   Json     // structured section content
+  order     Int      // display order
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resumeId])
+  @@map("resume_sections")
+}
+
+// ─────────────────────────────────────────────
+// APPLICATIONS
+// ─────────────────────────────────────────────
+
+model Application {
+  id               String            @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile    @relation(fields: [studentProfileId], references: [id])
+  jobId            String
+  job              Job               @relation(fields: [jobId], references: [id])
+  status           ApplicationStatus @default(APPLIED)
+  resumeId         String?           // which resume was submitted
+  coverNote        String?           @db.Text
+  appliedAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  recruiterNotes   String?
+
+  shortlist        Shortlist?
+
+  @@unique([studentProfileId, jobId])
+  @@index([jobId])
+  @@index([status])
+  @@map("applications")
+}
+
+// ─────────────────────────────────────────────
+// MATCHING ENGINE
+// ─────────────────────────────────────────────
+
+model MatchResult {
+  id               String            @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile    @relation(fields: [studentProfileId], references: [id])
+  jobId            String
+  job              Job               @relation(fields: [jobId], references: [id])
+
+  // Eligibility
+  eligibilityStatus      EligibilityStatus
+  eligibilityReasons     String[]
+
+  // Scores (0-100 each)
+  overallMatchPercentage Float
+  requiredSkillCoverage  Float
+  preferredSkillCoverage Float
+  semanticSimilarity     Float        @default(0)
+  academicFit            Float        @default(0)
+  projectRelevance       Float        @default(0)
+  certificationRelevance Float        @default(0)
+
+  // Skill breakdown
+  matchedSkills          Json         // [{ skillName, confidence, type: 'explicit'|'inferred' }]
+  inferredMatchedSkills  Json         // skills matched via inference
+  missingSkills          Json         // required skills student is missing
+
+  // Recommendation
+  recommendation         ShortlistStatus
+  reasonCodes            String[]
+  reasonSummary          String?      @db.Text
+
+  // Embeddings for semantic matching (optional, stored separately if large)
+  studentEmbeddingVersion String?
+  jdEmbeddingVersion      String?
+
+  computedAt             DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@unique([studentProfileId, jobId])
+  @@index([jobId, overallMatchPercentage(sort: Desc)])
+  @@index([recommendation])
+  @@map("match_results")
+}
+
+model Shortlist {
+  id            String          @id @default(uuid())
+  applicationId String          @unique
+  application   Application     @relation(fields: [applicationId], references: [id])
+  jobId         String
+  job           Job             @relation(fields: [jobId], references: [id])
+  status        ShortlistStatus
+  adminNotes    String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([jobId])
+  @@map("shortlists")
+}
+
+// ─────────────────────────────────────────────
+// FILES
+// ─────────────────────────────────────────────
+
+model UploadedFile {
+  id           String      @id @default(uuid())
+  originalName String
+  storedName   String      // UUID-based filename
+  path         String      // relative path in uploads dir
+  mimeType     String
+  size         Int         // bytes
+  category     FileCategory
+  uploadedBy   String      // userId
+  isPublic     Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  @@index([uploadedBy])
+  @@index([category])
+  @@map("uploaded_files")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // e.g. "CREATE_JOB", "RUN_MATCHING", "UPDATE_PROFILE"
+  entityType String?  // e.g. "Job", "StudentProfile"
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

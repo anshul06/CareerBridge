@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* DSU CareerBridge — Light Theme */
+    --background: 40 30% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 215 100% 14%;       /* oxford #002147 */
+    --primary-foreground: 40 30% 98%;
+    --secondary: 32 35% 75%;       /* tan #d2b48c */
+    --secondary-foreground: 215 100% 14%;
+    --muted: 40 20% 95%;
+    --muted-foreground: 215 15% 45%;
+    --accent: 32 35% 90%;
+    --accent-foreground: 215 100% 14%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 32 20% 88%;
+    --input: 32 20% 88%;
+    --ring: 215 100% 14%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 40 30% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 40 30% 96%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 40 30% 96%;
+    --primary: 32 35% 75%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 215 30% 20%;
+    --secondary-foreground: 40 30% 96%;
+    --muted: 215 30% 15%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 215 30% 18%;
+    --accent-foreground: 40 30% 96%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 30% 20%;
+    --input: 215 30% 20%;
+    --ring: 32 35% 75%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer utilities {
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Page fade transition */
+  .page-enter {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  .page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+}
+
+/* Print styles for resume */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}

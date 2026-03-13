@@ -1,0 +1,42 @@
+# DSU CareerBridge
+
+Full-stack campus placement platform for Dayananda Sagar University.
+
+## Structure
+
+```
+dsu-careerbridge/
+├── backend/    # NestJS + PostgreSQL + Prisma + Redis + OpenAI
+└── frontend/   # React + Vite + TypeScript + Tailwind + TanStack Query
+```
+
+## Backend
+
+```bash
+cd backend
+npm install
+# Copy .env.example to .env and fill in values
+npm run prisma:migrate
+npm run seed
+npm run start:dev
+```
+
+Runs on **http://localhost:3000** — API prefix: `/api/v1`
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Runs on **http://localhost:5173** — proxies `/api` → `http://localhost:3000`
+
+## Seed Credentials
+
+| Role      | Email                          | Password        |
+|-----------|--------------------------------|-----------------|
+| Student   | ravi.kumar@dsu.edu.in          | Student@123     |
+| Admin     | admin@dsu.edu.in               | Admin@DSU2025   |
+| Recruiter | recruiter@infosyslimited.com   | Recruiter@123   |
