@@ -1,61 +1,66 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Upload, Sparkles, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Upload, Sparkles, CheckCircle, Loader2 } from 'lucide-react';
 import SectionCard from '@/components/shared/SectionCard';
 import UploadDropzone from '@/components/shared/UploadDropzone';
 import SkillChip from '@/components/shared/SkillChip';
-import { useParseJD, useJobs } from '@/hooks/api';
+import { parseJobDescriptionSkills } from '@/lib/resume-parser';
 import { cn } from '@/lib/utils';
 
-const DEMO_PARSED = {
-  title: 'Software Development Engineer – II',
-  company: 'Amazon',
-  location: 'Bengaluru, India',
+interface ParsedJD {
+  title: string;
+  company: string;
+  location: string;
+  employmentType: string;
+  ctcRange: string;
+  minCGPA: number;
+  branches: string[];
+  requiredSkills: string[];
+  preferredSkills: string[];
+  experience: string;
+  summary: string;
+}
+
+const JD_METADATA_DEFAULTS: Omit<ParsedJD, 'requiredSkills' | 'preferredSkills'> = {
+  title: 'Software Engineer',
+  company: '—',
+  location: '—',
   employmentType: 'Full Time',
-  ctcRange: '₹20–30 LPA',
-  minCGPA: 7.0,
-  branches: ['CSE', 'IT', 'AI & DS', 'ISE'],
-  requiredSkills: ['Java', 'Python', 'AWS', 'Microservices', 'REST APIs', 'SQL', 'Git'],
-  preferredSkills: ['Kubernetes', 'Docker', 'System Design', 'DynamoDB'],
-  experience: '0–2 years (Fresh graduates welcome)',
-  summary: 'We are looking for passionate engineers to join our team. You will work on large-scale distributed systems, design and build new features, and collaborate with cross-functional teams.',
+  ctcRange: '—',
+  minCGPA: 0,
+  branches: [],
+  experience: 'Fresher / 0–2 years',
+  summary: '',
 };
 
 export default function RecruiterJDParser() {
   const [mode, setMode] = useState<'upload' | 'paste'>('paste');
   const [jdText, setJdText] = useState('');
-  const [parsed, setParsed] = useState<typeof DEMO_PARSED | null>(null);
+  const [parsed, setParsed] = useState<ParsedJD | null>(null);
+  const [parsing, setParsing] = useState(false);
 
-  const { data: jobs } = useJobs();
-  const parseJDMutation = useParseJD();
+  const handleFile = useCallback((f: File) => {
+    if (f.type === 'text/plain') {
+      const reader = new FileReader();
+      reader.onload = (ev) => setJdText((ev.target?.result as string) ?? '');
+      reader.readAsText(f);
+    }
+  }, []);
 
   const handleParse = () => {
-    if (!jdText && mode === 'paste') return;
-    const firstJobId = jobs?.[0]?.id ?? 'demo-job';
-    parseJDMutation.mutate({ jobId: firstJobId, text: jdText }, {
-      onSuccess: (data: any) => {
-        setParsed({
-          title: data.title ?? DEMO_PARSED.title,
-          company: data.company?.name ?? DEMO_PARSED.company,
-          location: data.location ?? DEMO_PARSED.location,
-          employmentType: data.jobType?.replace('_', ' ') ?? DEMO_PARSED.employmentType,
-          ctcRange: data.ctcMin ? `₹${data.ctcMin}–${data.ctcMax} LPA` : DEMO_PARSED.ctcRange,
-          minCGPA: data.minCgpa ?? DEMO_PARSED.minCGPA,
-          branches: data.eligibleBranches ?? DEMO_PARSED.branches,
-          requiredSkills: data.jobSkills?.filter((s: any) => s.type === 'REQUIRED').map((s: any) => s.skill?.name ?? s.skillId) ?? DEMO_PARSED.requiredSkills,
-          preferredSkills: data.jobSkills?.filter((s: any) => s.type === 'PREFERRED').map((s: any) => s.skill?.name ?? s.skillId) ?? DEMO_PARSED.preferredSkills,
-          experience: DEMO_PARSED.experience,
-          summary: data.description ?? DEMO_PARSED.summary,
-        });
-      },
-      onError: () => setParsed(DEMO_PARSED), // demo fallback
-    });
+    if (!jdText.trim()) return;
+    setParsing(true);
+    setTimeout(() => {
+      const { requiredSkills, preferredSkills } = parseJobDescriptionSkills(jdText);
+      setParsed({ ...JD_METADATA_DEFAULTS, requiredSkills, preferredSkills });
+      setParsing(false);
+    }, 400);
   };
 
   const handleReset = () => {
     setParsed(null);
     setJdText('');
-    parseJDMutation.reset();
+    setParsing(false);
   };
 
   return (
@@ -98,21 +103,21 @@ export default function RecruiterJDParser() {
               </div>
             ) : (
               <UploadDropzone
-                accept=".pdf,.doc,.docx,.txt"
-                onFile={f => setJdText(f.name)}
-                hint="PDF, DOCX, TXT · Max 5MB"
+                accept=".txt"
+                onFile={handleFile}
+                hint="TXT · Max 5MB"
               />
             )}
 
             <button
               onClick={handleParse}
-              disabled={parseJDMutation.isPending || (mode === 'paste' && jdText.length < 50)}
+              disabled={parsing || jdText.length < 50}
               className="flex items-center gap-2 bg-brand-oxford text-white text-sm font-semibold px-5 py-2.5 rounded-xl disabled:opacity-40 transition-opacity"
             >
-              {parseJDMutation.isPending ? (
+              {parsing ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Parsing...</>
               ) : (
-                <><Sparkles className="w-4 h-4" /> Parse with AI</>
+                <><Sparkles className="w-4 h-4" /> Extract Skills</>
               )}
             </button>
           </div>

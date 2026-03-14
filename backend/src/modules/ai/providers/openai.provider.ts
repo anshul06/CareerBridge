@@ -12,6 +12,7 @@ import {
   TailoredResume,
 } from '../interfaces/ai-provider.interface';
 import { RESUME_TEMPLATE_HTML } from '../templates/resume.template';
+import { extractSkillsLocal, extractJDSkillsLocal } from '../skill-extractor.util';
 
 @Injectable()
 export class OpenAIProvider implements IAIProvider {
@@ -64,34 +65,18 @@ Return ONLY valid JSON.`;
     return JSON.parse(result) as ParsedResumeContent;
   }
 
-  async extractSkillsFromText(text: string, context: string): Promise<ExtractedSkill[]> {
-    const system = `You are an expert technical skills extractor for campus placement systems.
-
-Extract ALL skills from the provided text. This includes:
-1. EXPLICIT skills: directly mentioned technologies, tools, languages
-2. INFERRED skills: skills implied by project descriptions, certifications, or work
-3. DERIVED skills: logical derivations (e.g., "built REST API" => REST API development, HTTP, API design)
-
-For each skill return:
-- name: canonical normalized skill name
-- rawName: exactly as found in text
-- confidence: "HIGH" (explicit), "MEDIUM" (inferred), "LOW" (weak inference)
-- category: one of [PROGRAMMING_LANGUAGE, FRAMEWORK_LIBRARY, DATABASE, CLOUD_DEVOPS, AI_ML, DATA_ANALYTICS, CS_FUNDAMENTALS, SOFT_SKILLS, DOMAIN_SKILLS, TOOLS_PLATFORMS, OTHER]
-- source: "explicit" or "inferred"
-- inferenceReason: (only for inferred) brief explanation
-- aliases: common aliases/alternate names
-
-Return JSON: { "skills": [...] }`;
-
-    const result = await this.chat(system, `Context: ${context}\n\nText to analyze:\n${text}`);
-    const parsed = JSON.parse(result);
-    return parsed.skills || [];
+  async extractSkillsFromText(text: string, _context: string): Promise<ExtractedSkill[]> {
+    return extractSkillsLocal(text) as ExtractedSkill[];
   }
 
   async parseJobDescription(rawText: string): Promise<ParsedJobDescription> {
+    // Extract skills locally (no API call needed)
+    const { requiredSkills, preferredSkills } = extractJDSkillsLocal(rawText);
+
+    // Use OpenAI only for metadata (title, company, CTC, branches, etc.)
     const system = `You are an expert at parsing campus placement job descriptions for Indian universities.
 
-Extract structured information from the JD. Return JSON with:
+Extract structured metadata from the JD. Return JSON with:
 - jobTitle (string)
 - company (string)
 - location (string)
@@ -104,17 +89,22 @@ Extract structured information from the JD. Return JSON with:
 - minCgpa (number, e.g. 7.5)
 - maxBacklogs (number, e.g. 0)
 - allowedGraduationYears: array of numbers
-- requiredSkills: array of technical/domain skill strings
-- preferredSkills: array of optional technical skill strings
-- softSkills: array of interpersonal/behavioral skill strings (e.g. ["Communication", "Teamwork", "Leadership", "Problem Solving", "Time Management"])
+- softSkills: array of interpersonal/behavioral skill strings
 - responsibilities: array of strings
 - keywords: array of important keywords
 - additionalNotes: string
 
+Do NOT include requiredSkills or preferredSkills — those are handled separately.
 Return ONLY valid JSON.`;
 
-    const result = await this.chat(system, `Parse this JD:\n\n${rawText}`);
-    return JSON.parse(result) as ParsedJobDescription;
+    try {
+      const result = await this.chat(system, `Parse this JD:\n\n${rawText}`);
+      const metadata = JSON.parse(result) as ParsedJobDescription;
+      return { ...metadata, requiredSkills, preferredSkills };
+    } catch {
+      // If OpenAI fails, return skill-only result
+      return { requiredSkills, preferredSkills };
+    }
   }
 
   async generateResume(input: ResumeGenerationInput): Promise<GeneratedResume> {

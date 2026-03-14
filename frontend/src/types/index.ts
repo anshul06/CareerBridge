@@ -289,6 +289,17 @@ export interface MatchedSkillInfo {
   importance: number;
 }
 
+export interface FuzzySkillMatch {
+  jobSkill: string;
+  matchedWith: string;
+  similarity: number;
+  partialScore: number;
+  path?: string[];    // graph traversal path (e.g. ['pytorch', 'tensorflow', 'python'])
+  hops?: number;      // 0=exact, 1=direct, 2=2-hop transitive, 3=3-hop transitive
+}
+
+export type WeightProfile = 'TECH_HEAVY' | 'DATA_SCIENCE' | 'ACADEMIC' | 'BALANCED';
+
 export interface MatchResult {
   id: string;
   studentProfileId: string;
@@ -311,6 +322,16 @@ export interface MatchResult {
   reasonCodes: string[];
   reasonSummary: string;
   computedAt: string;
+  // IEEE extended fields
+  majorAlignmentScore?: number;
+  experienceLevelScore?: number;
+  domainAlignmentScore?: number;
+  bonusScore?: number;
+  hiddenTalentFlag?: boolean;
+  biasAdjusted?: boolean;
+  weightProfile?: WeightProfile;
+  fuzzySkillMatches?: FuzzySkillMatch[];
+  matchedSoftSkills?: string[];
 }
 
 export interface Shortlist {

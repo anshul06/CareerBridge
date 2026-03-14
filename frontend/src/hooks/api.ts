@@ -392,10 +392,21 @@ export function useAdminCompanies() {
 export function useAdminRunMatching() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (jobId: string) => apiPost<{ processed: number }>(`/admin/jobs/${jobId}/run-matching`),
+    mutationFn: (jobId: string) =>
+      apiPost<{ processed: number; results: any[] }>(`/matching/jobs/${jobId}/run`),
     onSuccess: (_, jobId) => {
       qc.invalidateQueries({ queryKey: QK.matchResults(jobId) });
       qc.invalidateQueries({ queryKey: QK.jobMatches(jobId) });
     },
+  });
+}
+
+export function useEligibleStudentsForJob(jobId: string) {
+  return useQuery({
+    queryKey: ['matching', jobId, 'eligible'],
+    queryFn: () => apiGet<any[]>(`/matching/jobs/${jobId}/results?minScore=0&limit=200`),
+    enabled: !!jobId,
+    staleTime: STALE_1M,
+    retry: 1,
   });
 }

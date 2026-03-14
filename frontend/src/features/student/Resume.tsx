@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText, Upload, Sparkles, Wand2, Target, Download, Eye,
-  ChevronRight, Plus, Loader2, CheckCircle,
+  Plus, Loader2, CheckCircle,
 } from 'lucide-react';
 import SectionCard from '@/components/shared/SectionCard';
 import UploadDropzone from '@/components/shared/UploadDropzone';
@@ -10,6 +10,7 @@ import StepWizard from '@/components/shared/StepWizard';
 import SkillChip from '@/components/shared/SkillChip';
 import { MOCK_RESUMES } from '@/lib/mock-data';
 import { useStudentResumes, useUploadResume, useGenerateResume } from '@/hooks/api';
+import { parseResume, parseJobDescriptionSkills } from '@/lib/resume-parser';
 import { cn } from '@/lib/utils';
 
 type Flow = null | 'upload' | 'generate' | 'enhance' | 'tailor';
@@ -57,57 +58,114 @@ const TAILOR_STEPS = ['Paste JD', 'AI Analysis', 'Tailored Draft', 'Download'];
 function UploadFlow({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
+  const [resumeText, setResumeText] = useState('');
+  const [parsedSkills, setParsedSkills] = useState<string[]>([]);
+  const [inputMode, setInputMode] = useState<'file' | 'paste'>('file');
   const uploadMutation = useUploadResume();
 
-  const handleFile = (f: File) => {
+  const handleFile = useCallback((f: File) => {
     setFile(f);
-  };
+    // Read text files locally for immediate parsing
+    if (f.type === 'text/plain') {
+      const reader = new FileReader();
+      reader.onload = (ev) => setResumeText((ev.target?.result as string) ?? '');
+      reader.readAsText(f);
+    }
+  }, []);
 
   const handleParse = () => {
-    if (!file) return;
+    const textToParse = inputMode === 'paste' ? resumeText : resumeText;
     setStep(1);
-    uploadMutation.mutate(file, {
-      onSuccess: () => setStep(2),
-      onError: () => setStep(2), // show success screen even on error (demo mode)
-    });
+
+    // Run local skill extraction
+    setTimeout(() => {
+      const result = parseResume(textToParse || '');
+      const skills: string[] = [];
+      for (const [cat, entries] of Object.entries(result.byCategory)) {
+        if (cat === 'Inferred Skills') continue;
+        for (const e of entries) skills.push(e.name);
+      }
+      setParsedSkills(skills);
+      setStep(2);
+    }, 400);
+
+    // Also upload to backend if file provided (for PDF/DOCX server-side parsing)
+    if (file && inputMode === 'file') {
+      uploadMutation.mutate(file);
+    }
   };
 
   const handleDone = () => { setStep(3); setTimeout(onClose, 1000); };
+  const canParse = inputMode === 'paste' ? resumeText.trim().length > 50 : (!!file || resumeText.trim().length > 50);
 
   return (
     <div className="space-y-6">
       <StepWizard steps={UPLOAD_STEPS.map(l => ({ label: l }))} current={step} />
+
       {step === 0 && (
         <div className="space-y-4">
-          <UploadDropzone onFile={handleFile} hint="PDF, DOCX · Max 5MB" />
-          <button disabled={!file} onClick={handleParse} className="w-full bg-brand-oxford text-white text-sm font-semibold py-3 rounded-xl disabled:opacity-40 transition-opacity">
-            Parse Resume with AI
+          {/* Mode toggle */}
+          <div className="flex gap-1 bg-gray-100/80 p-1 rounded-xl w-fit">
+            {([['file', 'Upload File'], ['paste', 'Paste Text']] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setInputMode(id)}
+                className={cn('text-xs font-semibold px-4 py-1.5 rounded-lg transition-all',
+                  inputMode === id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {inputMode === 'file' ? (
+            <UploadDropzone onFile={handleFile} hint="PDF, DOCX, TXT · Max 5MB" />
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1.5">Paste Resume Text</label>
+              <textarea
+                value={resumeText}
+                onChange={e => setResumeText(e.target.value)}
+                rows={10}
+                placeholder="Paste the full text of your resume here..."
+                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-border bg-white outline-none focus:border-brand-oxford focus:ring-2 focus:ring-brand-oxford/10 transition-all resize-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">{resumeText.trim().split(/\s+/).filter(Boolean).length} words</p>
+            </div>
+          )}
+
+          <button disabled={!canParse} onClick={handleParse}
+            className="w-full bg-brand-oxford text-white text-sm font-semibold py-3 rounded-xl disabled:opacity-40 transition-opacity">
+            Extract Skills
           </button>
         </div>
       )}
+
       {step === 1 && (
         <div className="flex flex-col items-center py-8 gap-3">
           <Loader2 className="w-8 h-8 text-brand-oxford animate-spin" />
-          <p className="text-sm font-semibold text-foreground">Parsing resume with AI...</p>
-          <p className="text-xs text-muted-foreground">Extracting skills, experience, and education</p>
+          <p className="text-sm font-semibold text-foreground">Extracting skills...</p>
+          <p className="text-xs text-muted-foreground">Analyzing resume with local skill taxonomy</p>
         </div>
       )}
+
       {step === 2 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-green-600">
             <CheckCircle className="w-5 h-5" />
-            <p className="text-sm font-semibold">14 skills extracted from your resume</p>
+            <p className="text-sm font-semibold">{parsedSkills.length} skills extracted from your resume</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {['Python', 'React', 'Node.js', 'TensorFlow', 'SQL', 'Docker', 'REST APIs', 'Git'].map(s => (
+            {parsedSkills.slice(0, 20).map(s => (
               <SkillChip key={s} name={s} variant="matched" />
             ))}
+            {parsedSkills.length > 20 && (
+              <span className="text-xs text-muted-foreground self-center">+{parsedSkills.length - 20} more</span>
+            )}
           </div>
           <button onClick={handleDone} className="w-full bg-brand-oxford text-white text-sm font-semibold py-3 rounded-xl">
             Save & Continue
           </button>
         </div>
       )}
+
       {step === 3 && (
         <div className="flex flex-col items-center py-6 gap-2">
           <CheckCircle className="w-10 h-10 text-green-500" />
@@ -121,12 +179,15 @@ function UploadFlow({ onClose }: { onClose: () => void }) {
 function TailorFlow({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
   const [jd, setJd] = useState('');
-  const [processing, setProcessing] = useState(false);
+  const [jdSkills, setJdSkills] = useState<{ required: string[]; preferred: string[] }>({ required: [], preferred: [] });
 
   const handleAnalyze = () => {
-    setProcessing(true);
     setStep(1);
-    setTimeout(() => { setStep(2); setProcessing(false); }, 2500);
+    setTimeout(() => {
+      const { requiredSkills, preferredSkills } = parseJobDescriptionSkills(jd);
+      setJdSkills({ required: requiredSkills, preferred: preferredSkills });
+      setStep(2);
+    }, 400);
   };
 
   return (
@@ -145,32 +206,42 @@ function TailorFlow({ onClose }: { onClose: () => void }) {
             />
           </div>
           <button disabled={jd.length < 50} onClick={handleAnalyze} className="w-full bg-brand-oxford text-white text-sm font-semibold py-3 rounded-xl disabled:opacity-40">
-            Tailor Resume with AI
+            Analyze JD
           </button>
         </div>
       )}
       {step === 1 && (
         <div className="flex flex-col items-center py-8 gap-3">
           <Loader2 className="w-8 h-8 text-brand-oxford animate-spin" />
-          <p className="text-sm font-semibold text-foreground">Tailoring resume to JD...</p>
-          <p className="text-xs text-muted-foreground">Analyzing keywords and rewriting content</p>
+          <p className="text-sm font-semibold text-foreground">Analyzing job description...</p>
+          <p className="text-xs text-muted-foreground">Extracting required skills and keywords</p>
         </div>
       )}
       {step >= 2 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-green-600">
             <CheckCircle className="w-5 h-5" />
-            <p className="text-sm font-semibold">Resume tailored — 8 improvements made</p>
+            <p className="text-sm font-semibold">{jdSkills.required.length + jdSkills.preferred.length} skills extracted from JD</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-xs text-muted-foreground space-y-2">
-            <p>✓ Added missing keyword "distributed systems"</p>
-            <p>✓ Highlighted React experience (mentioned 3× in JD)</p>
-            <p>✓ Reordered sections to match JD priority</p>
-            <p>✓ Strengthened 4 bullet points with quantified impact</p>
-          </div>
+          {jdSkills.required.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-foreground mb-2">Required Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {jdSkills.required.slice(0, 15).map(s => <SkillChip key={s} name={s} variant="matched" />)}
+              </div>
+            </div>
+          )}
+          {jdSkills.preferred.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-foreground mb-2">Preferred Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {jdSkills.preferred.slice(0, 10).map(s => <SkillChip key={s} name={s} variant="outline" />)}
+              </div>
+            </div>
+          )}
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 border border-brand-oxford/30 text-brand-oxford text-sm font-semibold py-2.5 rounded-xl">
-              Preview
+              Close
             </button>
             <button onClick={onClose} className="flex-1 bg-brand-oxford text-white text-sm font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2">
               <Download className="w-4 h-4" /> Download
